@@ -68,17 +68,20 @@ class LoanCalculator:
         if 'loanconditionamount' not in self.sl.session_state:
             self.sl.session_state.loanconditionamount = None
         
+        print(f'Conditions {self.sl.session_state.loanconditions}')
         #Display added conditions
         if self.sl.session_state.loanconditions:
             i = 0
             for condition in self.sl.session_state.loanconditions:
-                cols = self.sl.columns([1, 5]) 
+                cols = self.sl.columns([1, 10]) 
                 with cols[0]:
                     if self.sl.button('x', key=f'loancondition{i}'):
+                        print(f' Remove condition {condition[0]}')
                         self.sl.session_state.loanconditions.remove(condition)
                         self.sl.rerun()
                     i += 1
                 with cols[1]:
+                    print(f'  Condition {condition[0]} {condition[1]}')
                     if len(condition) == 2:
                         self.sl.write(f'{condition[0]}: {condition[1]}')
                     elif len(condition) == 3:
@@ -123,7 +126,11 @@ class LoanCalculator:
         if self.sl.button("More Conditions", help="Add additional conditions", key='loancondition'):  
             cond = self.sl.selectbox(
                 "Select Condition Type", 
-                options=self.sl.session_state.loanconditionoptions)
+                options=self.sl.session_state.loanconditionoptions,
+                index=None,
+                key='loanconditiontype',
+                placeholder="Select Condition")
+            print(f'Selected {cond}')
             if cond:
                 self.sl.session_state.loanconditiontype = cond 
             
@@ -158,19 +165,23 @@ class LoanCalculator:
                 else:
                     ok = True
                 if self.sl.button("Calculate", key='loancalculate'):
+                    conditions = self.sl.session_state.loanconditions.copy()
                     ret = self.calculate(sl.session_state.loanamount, 
                                         sl.session_state.loanterm, 
                                         sl.session_state.loaninterest, 
                                         sl.session_state.loancompound,
                                         sl.session_state.loanpayment,
                                         self.sl.session_state.loanfind, 
-                                        self.sl.session_state.loanconditions)
+                                        conditions)
         if ret:
             if self.sl.session_state.loanfind == 'Periodic Payment':
                 if isinstance(ret, list):
                     self.sl.write("Periodic Payment:")
+                    total = 0
                     for item in ret:
                         self.sl.write(f'{item[0]} for pay period {item[1]} to {item[2]}')
+                        total += item[0] * (int(item[2])-int(item[1])+1)
+                    self.sl.write(f'Total payment at the end of loan: {total}')
                 else:
                     self.sl.write(f"Periodic Payment: ${ret}")
             elif self.sl.session_state.loanfind == 'Total Amount':
@@ -210,9 +221,9 @@ class LoanCalculator:
                         payperiod = int(condition[2])
                         for r in range(1, payperiod):
                             P += i * P
-                            print(f'Total P={P} with interest {i} at period {r}')
+                            #print(f'Total P={P} with interest {i} at period {r}')
                             P -= payment1
-                            print(f'Total P={P} with payment {payment1} at period {r}')
+                            #print(f'Total P={P} with payment {payment1} at period {r}')
                         P -= int(condition[1]) 
                         t -= payperiod-1
                         print(f'New numbers at {payperiod}: P={P} t={t}')
