@@ -1,3 +1,4 @@
+from curses import termattrs
 import streamlit
 import re
 
@@ -13,6 +14,11 @@ class LoanCalculator:
             self.sl.session_state.loanterm = '' 
         if 'loanconditions' not in self.sl.session_state:
             self.sl.session_state.loanconditions = []
+        
+        if 'loanfind' not in self.sl.session_state:
+            self.sl.session_state.loanfind = None
+        if 'loanpayment' not in self.sl.session_state:
+            self.sl.session_state.loanpayment = None
             
         value = self.sl.text_input("Loan Term (months)", value=self.sl.session_state.loanterm)
         if value:
@@ -41,12 +47,16 @@ class LoanCalculator:
             horizontal=True
         )
         
+        print(f'Find {self.sl.session_state.loanfind}')
+        
         if 'loanfind' in self.sl.session_state:
             if self.sl.session_state.loanfind == 'Total Amount':
-                self.sl.text_input("Month Payment", key='loanpayment')
+                self.sl.text_input("Periodic Payment", key='loanpayment')
             elif self.sl.session_state.loanfind == 'Additional Principal':
-                self.sl.text_input("Month Payment", key='loanpayment')
+                self.sl.text_input("Periodic Payment", key='loanpayment')
                 self.sl.text_input("Total Amount", key='loantotal')
+            elif self.sl.session_state.loanfind == 'Terms To Payoff':
+                self.sl.text_input('Periodic Payment', key='loanpayment')
         
         self.sl.session_state.loanconditionoptions = [
                                                     'Initial Payment (Per Pay Period)',
@@ -127,8 +137,7 @@ class LoanCalculator:
                 options=[
                     'Periodic Payment',
                     'Total Amount',
-                    'Terms To Payoff',
-                    'Additional Principal'
+                    'Terms To Payoff'
                     ],
                 key='loanfind')
         
@@ -153,6 +162,7 @@ class LoanCalculator:
                                         sl.session_state.loanterm, 
                                         sl.session_state.loaninterest, 
                                         sl.session_state.loancompound,
+                                        sl.session_state.loanpayment,
                                         self.sl.session_state.loanfind, 
                                         self.sl.session_state.loanconditions)
         if ret:
@@ -165,12 +175,10 @@ class LoanCalculator:
                     self.sl.write(f"Periodic Payment: ${ret}")
             elif self.sl.session_state.loanfind == 'Total Amount':
                 self.sl.write(f"Total Amount: ${ret}")
-            elif self.sl.session_state.loanfind == 'Additional Principal':
-                self.sl.write(f"Additional Principal: ${ret}")
             elif self.sl.session_state.loanfind == 'Terms To Payoff':
                 self.sl.write(f'The Number of Terms to Payoff: {ret}')
             
-    def calculate(self, loanamount, loanterm, loaninterest, loancompound, loanfind, conditions=None):
+    def calculate(self, loanamount, loanterm, loaninterest, loancompound, loanpayment, loanfind, conditions=None):
         P = float(loanamount)
         t = float(loanterm)
         i = float(loaninterest)/100
@@ -217,8 +225,8 @@ class LoanCalculator:
             return payments
         elif loanfind == 'Total Amount':
             return self.calculate_total_amount(P, t, i)
-        elif loanfind == 'Additional Principal':
-            return self.calculate_additional_principal(P, t, i)
+        elif loanfind == 'Terms To Payoff':
+            return self.calculate_terms(P, t, i, float(loanpayment))
         return f"Error: {loanfind} Not supported"
     
     def calculate_periodic_payment(self, loanamount, loanterm, loaninterest):
@@ -235,6 +243,21 @@ class LoanCalculator:
         return total
         
         
-    def calculate_additional_principal(self, loanamount, loanterm, loaninterest):
-        return 0
+    def calculate_terms(self, loanamount, loanterm, loaninterest, payment):
+        #Derive from: p= (i x P) / (1 - (1 + i)^-n), p = monthly payment, i = interest per pay period, n = number of periods, P = loan amount (principal)
+        # 1/ (1 - (i*P)/p) = (1+i)^n
+        
+        left = 1 / (1 - (loaninterest * loanamount)/payment)
+        right = 1+loaninterest
+        initialn = int(loanterm)
+        low = left + 10
+        while low > left:
+            low = (1+loaninterest) ** initialn
+            initialn = int(initialn * 2 / 3)
+        if low < left:
+            while low < left:
+                low = (1+loaninterest) ** initialn
+                initialn +=1
+            initialn -= 1
+        return initialn
     
