@@ -177,17 +177,17 @@ class LoanCalculator:
             if self.sl.session_state.loanfind == 'Periodic Payment':
                 if isinstance(ret, list):
                     self.sl.write("Periodic Payment:")
-                    total = 0
+                    total = sum([float(condition[1]) for condition in self.sl.session_state.loanconditions if condition[0] == "Additional Principal (One Time)"]) 
                     for item in ret:
-                        self.sl.write(f'{item[0]} for pay period {item[1]} to {item[2]}')
+                        self.sl.write(f'{round(item[0],2)} for pay periods {item[1]} to {item[2]}, remaining principal {round(item[3],2)}')
                         total += item[0] * (int(item[2])-int(item[1])+1)
-                    self.sl.write(f'Total payment at the end of loan: {total}')
+                    self.sl.write(f'Total payment at the end of loan: {round(total, 2)}')
                 else:
-                    self.sl.write(f"Periodic Payment: ${ret}")
+                    self.sl.write(f"Periodic Payment: ${round(ret, 2)}")
             elif self.sl.session_state.loanfind == 'Total Amount':
-                self.sl.write(f"Total Amount: ${ret}")
+                self.sl.write(f"Total Amount: ${round(ret, 2)}")
             elif self.sl.session_state.loanfind == 'Terms To Payoff':
-                self.sl.write(f'The Number of Terms to Payoff: {ret}')
+                self.sl.write(f'The Number of Terms to Payoff: {round(ret)}')
             
     def calculate(self, loanamount, loanterm, loaninterest, loancompound, loanpayment, loanfind, conditions=None):
         P = float(loanamount)
@@ -213,7 +213,7 @@ class LoanCalculator:
                 conditions.remove(conditions[0])
             else:
                 payment = self.calculate_periodic_payment(P, t, i)
-            payments = [(payment, 1, loanterm)]
+            payments = [(payment, 1, loanterm, 0)]
             if conditions:
                 payment1 = payment
                 for condition in conditions: 
@@ -224,15 +224,16 @@ class LoanCalculator:
                             #print(f'Total P={P} with interest {i} at period {r}')
                             P -= payment1
                             #print(f'Total P={P} with payment {payment1} at period {r}')
+                        lastidx = len(payments) -1
+                        lastpayment = list(payments[lastidx])
+                        lastpayment[2]=payperiod-1
+                        lastpayment[3] = P
+                        payments[lastidx] = tuple(lastpayment)
                         P -= int(condition[1]) 
                         t -= payperiod-1
                         print(f'New numbers at {payperiod}: P={P} t={t}')
                         payment1 = self.calculate_periodic_payment(P, t, i)
-                        lastidx = len(payments) -1
-                        lastpayment = list(payments[lastidx])
-                        lastpayment[2]=payperiod-1
-                        payments[lastidx] = tuple(lastpayment)
-                        payments.append((payment1, payperiod, loanterm))
+                        payments.append((payment1, payperiod, loanterm, 0))
             return payments
         elif loanfind == 'Total Amount':
             return self.calculate_total_amount(P, t, i)
